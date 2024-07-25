@@ -1,2 +1,6 @@
 bin/
 *.bin
+.clangd
+src/kernel/nolibc/
+videos/ 
+build/ 
