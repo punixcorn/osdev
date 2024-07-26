@@ -1,41 +1,38 @@
-bootloader=src/boot.asm
-kernel=src/call_kernel.c
-#kernel_files := $(shell find src/kernel/ -name *.c)
-kernel_files :=
-bin=temp.bin
-iso=potatOs.iso
-build_dir=build
-Linker=src/linker.ld
+# directories
+bootdir := src/bootloader
+kerneldir := src/kernel
+build := build
+configdir := src/config
+
+kernel_files := 
 
 all: build
 
 build: bootloader kernel 
-
+	
 kernel:
 	# create and empty file
-	dd if=/dev/zero of=${build_dir}/os.bin bs=512 count=10
+	dd if=/dev/zero of=${build}/os.bin bs=512 count=10
 	# build kernel
-	i386-elf-gcc -m32 -g -ffreestanding -c ${kernel} ${kernel_files} -o ${build_dir}/kernel.o
-	i386-elf-ld -o ${build_dir}/kernel.bin -T${Linker} ${build_dir}/kernel.o --oformat binary
+	i386-elf-gcc -m32 -g -ffreestanding -c ${kerneldir}/bootstrap.c ${kernel_files} -o ${build}/kernel.o
+	i386-elf-ld -o ${build}/kernel.bin -T${configdir}/linker.ld ${build}/kernel.o --oformat binary
 	# add bootloader to kernel
-	cat ${build_dir}/bootloader.bin  ${build_dir}/kernel.bin > ${build_dir}/${bin}
+	cat ${build}/bootloader.bin  ${build}/kernel.bin > ${build}/dev.bin
 	# move them into the empty file
-	dd if=${build_dir}/${bin} of=${build_dir}/os.bin conv=notrunc bs=512
-	
+	dd if=${build}/dev.bin of=${build}/os.bin conv=notrunc bs=512
 
-bootloader: ${bootloader}
+bootloader: ${bootdir}/boot.asm
 	mkdir -p build/
-	nasm -fbin ${bootloader} -o ${build_dir}/bootloader.bin
+	nasm -fbin ${bootdir}/boot.asm -o ${build}/bootloader.bin
 
 dev:
-	i386-elf-gcc -m32 -g -ffreestanding -c ${kernel} ${kernel_files} -o ${build_dir}/kernel.o
-	i386-elf-ld -o ${build_dir}/kernel.oo -T${Linker} ${build_dir}/kernel.o
-	objdump -d -h -M intel ${build_dir}/kernel.o
 
+	i386-elf-gcc -m32 -g -ffreestanding -c ${kerneldir}/bootstrap.c ${kernel_files} -o ${build}/kernel.dev.o
+	i386-elf-ld -o ${build}/kernel.dev.final.o -T${configdir}/linker.ld ${build}/kernel.dev.o 
+	objdump -d -h -M intel ${build}/kernel.dev.final.o
 
 run: all 
-	qemu-system-i386 ${build_dir}/os.bin
+	qemu-system-i386 ${build}/os.bin
 
 clean:
 	rm -rf build/
-
