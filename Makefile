@@ -1,38 +1,46 @@
-# directories
-bootdir := src/bootloader
-kerneldir := src/kernel
-build := build
-configdir := src/config
+BOOTSTRAP = src/kernel/kernel.asm
+KERNEL_SRC = src/kernel/kernel.c
+BIN :=
+linker = linker.ld
+KERNEL_OUT = build/kernel.bin
+ISO = build/osdev.iso
 
-kernel_files := 
 
 all: build
 
-build: bootloader kernel 
-	
-kernel:
-	# create and empty file
-	dd if=/dev/zero of=${build}/os.bin bs=512 count=10
-	# build kernel
-	i386-elf-gcc -m32 -g -ffreestanding -c ${kerneldir}/bootstrap.c ${kernel_files} -o ${build}/kernel.o
-	i386-elf-ld -o ${build}/kernel.bin -T${configdir}/linker.ld ${build}/kernel.o --oformat binary
-	# add bootloader to kernel
-	cat ${build}/bootloader.bin  ${build}/kernel.bin > ${build}/dev.bin
-	# move them into the empty file
-	dd if=${build}/dev.bin of=${build}/os.bin conv=notrunc bs=512
+# build elf32 binary for multiboot
+build: clean
+	mkdir -p build
+	nasm -f elf32 ${BOOTSTRAP} -o build/bootstrap.o
+	gcc -m32 -ffreestanding -c ${KERNEL_SRC} -o build/kernel.o -w
+	ld -m elf_i386 -T${linker} -o ${KERNEL_OUT} build/kernel.o build/bootstrap.o
 
-bootloader: ${bootdir}/boot.asm
-	mkdir -p build/
-	nasm -fbin ${bootdir}/boot.asm -o ${build}/bootloader.bin
+build-debug: clean
+	mkdir -p build
+	nasm -f elf32 ${BOOTSTRAP}  -o build/bootstrap.o
+	gcc -m32 -ffreestanding -c ${KERNEL_SRC} -o build/kernel.o -ggdb
+	ld -m elf_i386 -T${linker} -o ${KERNEL_OUT} build/kernel.o build/bootstrap.o
 
-dev:
+debug:
+	qemu-system-i386 -kernel ${KERNEL_OUT} -s -S &
+	gdb -x .gdbinit
 
-	i386-elf-gcc -m32 -g -ffreestanding -c ${kerneldir}/bootstrap.c ${kernel_files} -o ${build}/kernel.dev.o
-	i386-elf-ld -o ${build}/kernel.dev.final.o -T${configdir}/linker.ld ${build}/kernel.dev.o 
-	objdump -d -h -M intel ${build}/kernel.dev.final.o
+iso: build
+	mkdir -p build/target/iso/boot/grub
+	cp src/target/grub.cfg build/target/iso/boot/grub
+	cp ${KERNEL_OUT} build/target/iso/boot/
+	grub-mkrescue build/target/iso -o ${ISO}
 
-run: all 
-	qemu-system-i386 ${build}/os.bin
+# #dd if=/dev/zero of=build/iso/osdev.img bs=1024 count=1440
+# dd if=${BIN} of=build/iso/osdev.img seek=0 count=1 conv=notrunc
+# genisoimage -quiet -V "OSDEV" -input-charset iso8859-1 -o build/osdev.iso -b osdev.img -hide build/iso/osdev.img build/iso
+# rm -rf build/iso
+
+run-iso: iso
+	qemu-system-i386 -cdrom ${ISO}
+
+run: build
+	qemu-system-i386 -kernel ${KERNEL_OUT}
 
 clean:
-	rm -rf build/
+	rm -rf build

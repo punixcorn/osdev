@@ -2,6 +2,9 @@ bin/
 *.bin
 .clangd
 src/kernel/nolibc/
-videos/ 
-build/ 
+videos/
+build/
+peda*
+dip-help-osdev/
+.gdb_history
 
